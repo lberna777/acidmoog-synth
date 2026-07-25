@@ -1,0 +1,214 @@
+====================================================================
+ ACIDMOOG — INSTALLAZIONE SU MAC (Logic Pro)
+ Sintetizzatore di bassi monofonico, ibrido TB-303 / Moog
+====================================================================
+
+Questa guida porta dal repo appena clonato al plugin che compare nella
+lista strumenti di Logic Pro. Serve una volta sola: dopo, per aggiornare
+il plugin, basta ripetere i passi 4 e 5.
+
+Tempo stimato la prima volta: 20-30 minuti, quasi tutti di attesa
+(scaricamento di JUCE e compilazione).
+
+
+--------------------------------------------------------------------
+ PASSO 1 — Strumenti di sviluppo Apple
+--------------------------------------------------------------------
+
+Apri Terminale (Applicazioni > Utility > Terminale) e incolla:
+
+    xcode-select --install
+
+Se compare una finestra, clicca "Installa" e aspetta la fine.
+Se risponde "command line tools are already installed", sei a posto.
+
+Verifica:
+
+    clang --version
+
+Deve stampare una versione di Apple clang.
+
+
+--------------------------------------------------------------------
+ PASSO 2 — Homebrew e CMake
+--------------------------------------------------------------------
+
+CMake e' il programma che orchestra la compilazione. Se non hai
+Homebrew, installalo:
+
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+Alla fine Homebrew stampa due righe da incollare per aggiungerlo al
+PATH: eseguile, altrimenti il comando "brew" non verra' trovato.
+
+Poi installa CMake:
+
+    brew install cmake
+
+Verifica (serve la 3.22 o superiore):
+
+    cmake --version
+
+
+--------------------------------------------------------------------
+ PASSO 3 — Scaricare il progetto
+--------------------------------------------------------------------
+
+Il repo e' privato: la prima volta git chiedera' le credenziali GitHub.
+Se non hai gia' configurato l'accesso, il modo piu' semplice e':
+
+    brew install gh
+    gh auth login
+
+(scegli GitHub.com > HTTPS > autenticazione via browser)
+
+Poi clona il progetto dove preferisci, per esempio nella home:
+
+    cd ~
+    git clone https://github.com/lberna777/acidmoog-synth.git
+    cd acidmoog-synth
+
+Da qui in avanti tutti i comandi vanno dati dentro questa cartella.
+
+
+--------------------------------------------------------------------
+ PASSO 4 — Compilare il plugin
+--------------------------------------------------------------------
+
+Configurazione (la prima volta scarica JUCE, ~5-10 minuti, e' normale
+che sembri fermo):
+
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+L'opzione OSX_ARCHITECTURES crea un binario universale, che funziona sia
+su Mac Apple Silicon (M1/M2/M3/M4) sia su Mac Intel. Se il tuo Mac e'
+Apple Silicon e vuoi compilare piu' in fretta, puoi usare solo:
+
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64"
+
+Compilazione dell'Audio Unit (il formato che usa Logic):
+
+    cmake --build build --target AcidMoog_AU -j8
+
+Se usi anche altre DAW (Ableton Live, Reaper, Bitwig), compila pure il
+VST3:
+
+    cmake --build build --target AcidMoog_VST3 -j8
+
+A fine compilazione deve comparire "Built target AcidMoog_AU" senza
+righe che contengano "error".
+
+
+--------------------------------------------------------------------
+ PASSO 5 — Installare il plugin
+--------------------------------------------------------------------
+
+I plugin compilati finiscono in build/AcidMoog_artefacts/Release/.
+Vanno copiati nelle cartelle di sistema dove Logic li cerca:
+
+    mkdir -p ~/Library/Audio/Plug-Ins/Components
+    mkdir -p ~/Library/Audio/Plug-Ins/VST3
+
+    cp -R build/AcidMoog_artefacts/Release/AU/AcidMoog.component \
+          ~/Library/Audio/Plug-Ins/Components/
+
+    cp -R build/AcidMoog_artefacts/Release/VST3/AcidMoog.vst3 \
+          ~/Library/Audio/Plug-Ins/VST3/
+
+(la seconda copia serve solo se hai compilato anche il VST3)
+
+Firma locale del plugin. macOS blocca il codice non firmato: una firma
+"ad-hoc" e' sufficiente per usarlo sulla tua macchina.
+
+    codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/AcidMoog.component
+
+
+--------------------------------------------------------------------
+ PASSO 6 — Far riconoscere il plugin a Logic
+--------------------------------------------------------------------
+
+Logic accetta solo Audio Unit che passano la validazione di sistema.
+Verificala tu prima di aprire Logic:
+
+    auval -v aumu Acmg Lrnz
+
+L'ultima riga deve dire "AU VALIDATION SUCCEEDED".
+(aumu = strumento musicale, Acmg = codice del plugin, Lrnz = codice
+del produttore)
+
+Poi apri Logic Pro. Alla prima apertura fa la scansione automatica e
+AcidMoog compare qui:
+
+    traccia software instrument > slot Strumento
+      > AU Instruments > Lorenzo > AcidMoog
+
+Se non compare, forza una nuova scansione:
+
+    Logic Pro > Impostazioni > Plug-in Manager
+      > seleziona AcidMoog > "Ripeti scansione selezione"
+
+
+--------------------------------------------------------------------
+ PASSO 7 — Primo suono
+--------------------------------------------------------------------
+
+1. Crea una traccia Software Instrument e caricaci AcidMoog.
+2. Suona una nota bassa: senti la saw, filtrata dal ladder.
+3. Gira CUTOFF verso sinistra e RESONANCE verso destra: oltre il 90%
+   il LED rosso "OSC" si accende e il filtro entra in autooscillazione
+   (e' il suono acido del 303).
+4. Alza DRIVE per la saturazione, e ENV > FILTER per far muovere il
+   cutoff dall'inviluppo — e' li' che nasce il tipico "wow" acido.
+5. Suona due note legate (sovrapposte nel piano roll) per sentire il
+   GLIDE; con velocity oltre 100 senti l'ACCENT (LED ambra).
+
+Per usarlo come sampler: metti lo switch SOURCE su SMPL, trascina un
+tuo file audio nel riquadro tratteggiato, e imposta ROOT sulla nota a
+cui il sample suona nella sua intonazione originale.
+
+
+--------------------------------------------------------------------
+ PROBLEMI FREQUENTI
+--------------------------------------------------------------------
+
+"cmake: command not found"
+    Homebrew non e' nel PATH. Riapri il Terminale, oppure esegui le
+    due righe che Homebrew ha stampato a fine installazione.
+
+La compilazione si ferma su un errore che nomina JUCE
+    Cancella la cartella build e ricomincia dal Passo 4:
+        rm -rf build
+
+"auval" fallisce oppure Logic non vede il plugin
+    Svuota la cache delle Audio Unit e riavvia il Mac:
+        rm -rf ~/Library/Caches/AudioUnitCache
+    Poi riapri Logic e ripeti la scansione (Passo 6).
+
+Logic dice che il plugin non e' verificato / non si apre
+    Rifai la firma ad-hoc del Passo 5. Se persiste:
+        xattr -cr ~/Library/Audio/Plug-Ins/Components/AcidMoog.component
+
+Il plugin non suona
+    E' monofonico e reagisce solo al MIDI: verifica che la traccia sia
+    armata e che il MASTER VOLUME non sia tutto a sinistra.
+
+
+--------------------------------------------------------------------
+ VERIFICA CHE TUTTO SIA A POSTO (facoltativo)
+--------------------------------------------------------------------
+
+Il progetto include test automatici del motore audio:
+
+    cmake --build build --target AcidMoogTests -j8
+    ./build/AcidMoogTests_artefacts/Release/AcidMoogTests
+
+Deve chiudere con "0 failures".
+
+
+--------------------------------------------------------------------
+ NOTA SULLA LICENZA JUCE
+--------------------------------------------------------------------
+
+AcidMoog e' costruito su JUCE. Per uso personale la licenza gratuita
+basta. Se un giorno vuoi distribuire o vendere il plugin, controlla il
+piano di licenza JUCE adeguato prima di pubblicarlo.

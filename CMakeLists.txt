@@ -5,12 +5,25 @@ project(AcidMoog VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# JUCE viene cercato accanto al repo (clone shallow), oppure via -DJUCE_PATH=...
+# JUCE: si usa una copia locale se esiste (-DJUCE_PATH=... o clone accanto al repo),
+# altrimenti viene scaricata automaticamente. Cosi' su una macchina nuova basta
+# clonare questo repo e lanciare cmake, senza preparare nulla a mano.
 if(NOT DEFINED JUCE_PATH)
     set(JUCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../JUCE-shared")
 endif()
 
-add_subdirectory(${JUCE_PATH} JUCE)
+if(EXISTS "${JUCE_PATH}/CMakeLists.txt")
+    message(STATUS "AcidMoog: uso JUCE locale in ${JUCE_PATH}")
+    add_subdirectory(${JUCE_PATH} JUCE)
+else()
+    message(STATUS "AcidMoog: JUCE non trovato in ${JUCE_PATH}, scarico da GitHub")
+    include(FetchContent)
+    FetchContent_Declare(JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG        8.0.15
+        GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(JUCE)
+endif()
 
 juce_add_plugin(AcidMoog
     COMPANY_NAME            "Lorenzo"
